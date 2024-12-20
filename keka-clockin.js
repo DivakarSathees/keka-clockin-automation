@@ -23,6 +23,7 @@ async function getCurrentLocation() {
                 '--disable-dev-shm-usage',
                 '--remote-debugging-port=9222',
                 '--start-maximized',
+                '--ignore-certificate-errors'
             ],
           });
        
@@ -33,12 +34,17 @@ async function getCurrentLocation() {
       const context = browser.defaultBrowserContext();
       console.log("context");
       
-    //   const asd = await context.overridePermissions("http://127.0.0.1:8080", ["geolocation"]);
+      // const asd = await context.overridePermissions("https://currentlocationtracker7.onrender.com", ["geolocation"]);
     //   console.log(asd);
+    // const asd = await context.overridePermissions("https://iamneo.keka.com", ["geolocation"]);
+
 
     
       // Open the locally served page
-      await page.goto("http://127.0.0.1:8080");
+      // await page.goto("http://127.0.0.1:8080", { waitUntil: 'networkidle2' });
+      // await page.goto("https://iamneo.keka.com", { waitUntil: 'networkidle2' });
+      await page.goto("https://currentlocationtracker7.onrender.com", { waitUntil: 'networkidle2' });
+  console.log("fff");
   
       // Wait for geolocation data to appear
       await page.waitForFunction(() => document.body.innerText.includes("latitude"));
@@ -46,9 +52,36 @@ async function getCurrentLocation() {
       // Retrieve location data
       const location = await page.evaluate(() => JSON.parse(document.body.innerText));
       console.log("Retrieved Location:", location);
+      await browser.close();
+
+      const geocodeAPI = "https://api.opencagedata.com/geocode/v1/json";
+                        
+      const apiKey = "cf6826fd71ad4c6f939352b58df02ec4"; // Get a free API key from https://opencagedata.com/
+
+      const url = `${geocodeAPI}?q=${location.latitude}+${location.longitude}&key=${apiKey}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      // console.log(data.results[0].components);
+      // console.log(data);
+      if (data.results && data.results[0]) {
+        const details = data.results[0].components;
+        return {
+            addressLine1: data.results[0].formatted,
+            addressLine2: details.city || details.town || details.village,
+            state: details.state,
+            city: details.state_district,
+            countryCode: details.country_code.toUpperCase(),
+            zip: details.postcode,
+            latitude:location.latitude,
+            longitude:location.longitude,
+        };
+      } else {
+          return { error: "No results found." };
+      }
+      
+
   
       // Close Puppeteer
-      await browser.close();
     //   server.close(); // Stop the server
       return location;
     } catch (error) {
@@ -69,12 +102,14 @@ function isLocationMatch(currentLocation, predefinedLocation) {
   return distance < 0.01; // Adjust threshold based on your accuracy
 }
 const endpoint = 'https://iamneo.keka.com/k/leave/api/me/leave/summary?forDate=2024-12-18';
-const token = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFBRjQzNjk5RUE0NDlDNkNCRUU3NDZFMjhDODM5NUIyMEE0MUNFMTgiLCJ4NXQiOiJHdlEybWVwRW5HeS01MGJpaklPVnNncEJ6aGciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FwcC5rZWthLmNvbSIsIm5iZiI6MTczNDU0MjAwMywiaWF0IjoxNzM0NTQyMDAzLCJleHAiOjE3MzQ2Mjg0MDMsImF1ZCI6WyJrZWthaHIuYXBpIiwiaGlyby5hcGkiLCJodHRwczovL2FwcC5rZWthLmNvbS9yZXNvdXJjZXMiXSwic2NvcGUiOlsib3BlbmlkIiwia2VrYWhyLmFwaSIsImhpcm8uYXBpIiwib2ZmbGluZV9hY2Nlc3MiXSwiYW1yIjpbImV4dGVybmFsIl0sImNsaWVudF9pZCI6Ijk4N2NjOTcxLWZjMjItNDQ1NC05OWY5LTE2YzA3OGZhN2ZmNiIsInN1YiI6IjE3OTIyZGRkLTlmOWYtNDcwMi05NjVhLWZjYTcyYmU0ZWY2OCIsImF1dGhfdGltZSI6MTczNDU0MjAwMCwiaWRwIjoiT2ZmaWNlMzY1IiwidGVuYW50X2lkIjoiNGNlMDZlZWYtNTA0Ni00ZDQ5LTlhMTAtNTdhNTQ2ZTVmMmNhIiwidGVuYW50aWQiOiI0Y2UwNmVlZi01MDQ2LTRkNDktOWExMC01N2E1NDZlNWYyY2EiLCJzdWJkb21haW4iOiJpYW1uZW8ua2VrYS5jb20iLCJ1c2VyX2lkIjoiMGYwMmU5YmItZTEwYy00OGEzLTg3NDYtN2ZlZDZjZWU1ZDA3IiwidXNlcl9pZGVudGlmaWVyIjoiMGYwMmU5YmItZTEwYy00OGEzLTg3NDYtN2ZlZDZjZWU1ZDA3IiwidXNlcm5hbWUiOiJkaXZha2FyLnNAaWFtbmVvLmFpIiwiZW1haWwiOiJkaXZha2FyLnNAaWFtbmVvLmFpIiwiYXV0aGVudGljYXRpb25fdHlwZSI6IjIiLCJzaWQiOiJBMEZBRDI2NEJGRTk2RDM5NDUxQTI4ODYyRUNDMDg1MiIsImp0aSI6IjBGNUEzNThBODdBNUNCQzlFOUZBNkZBQTRBMEE0NzlFIn0.UkxhHJqGo0V-aJUGPkJ6fQUy8omcrGKF_zTZ-RucGfW4598cIq-kGZGy2txrwfYKtdae52AvxksSLl5ek5xUu0iIr9MOiieNnwi0a724h3tEdXACWcjSpcsqteqHHCN_2M1L90vvJbOampANNyfQEkCslWgsfP9jxQ3tG2y4H9JLJQYtNBfl4-_SgUbeEIMu2Bs3MdpsuvFHHB6EBRSVDr0SRkvEsrI4PWhAI1I8SWonQNPG4jTL_-hnze7wIeIErc9Rybjcj5tp8Ns3CqhBR2l3O-0nsXthLTn__DBUNQwCsqTEp7zuFz1AS8du5INCMNJ4UGllGyodHvO6YAJGfA'; // Replace with your token
+const token = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFBRjQzNjk5RUE0NDlDNkNCRUU3NDZFMjhDODM5NUIyMEE0MUNFMTgiLCJ4NXQiOiJHdlEybWVwRW5HeS01MGJpaklPVnNncEJ6aGciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FwcC5rZWthLmNvbSIsIm5iZiI6MTczNDcxNTUyMiwiaWF0IjoxNzM0NzE1NTIyLCJleHAiOjE3MzQ4MDE5MjIsImF1ZCI6WyJrZWthaHIuYXBpIiwiaGlyby5hcGkiLCJodHRwczovL2FwcC5rZWthLmNvbS9yZXNvdXJjZXMiXSwic2NvcGUiOlsib3BlbmlkIiwia2VrYWhyLmFwaSIsImhpcm8uYXBpIiwib2ZmbGluZV9hY2Nlc3MiXSwiYW1yIjpbImV4dGVybmFsIl0sImNsaWVudF9pZCI6Ijk4N2NjOTcxLWZjMjItNDQ1NC05OWY5LTE2YzA3OGZhN2ZmNiIsInN1YiI6IjE3OTIyZGRkLTlmOWYtNDcwMi05NjVhLWZjYTcyYmU0ZWY2OCIsImF1dGhfdGltZSI6MTczNDU0MjAwMCwiaWRwIjoiT2ZmaWNlMzY1IiwidGVuYW50X2lkIjoiNGNlMDZlZWYtNTA0Ni00ZDQ5LTlhMTAtNTdhNTQ2ZTVmMmNhIiwidGVuYW50aWQiOiI0Y2UwNmVlZi01MDQ2LTRkNDktOWExMC01N2E1NDZlNWYyY2EiLCJzdWJkb21haW4iOiJpYW1uZW8ua2VrYS5jb20iLCJ1c2VyX2lkIjoiMGYwMmU5YmItZTEwYy00OGEzLTg3NDYtN2ZlZDZjZWU1ZDA3IiwidXNlcl9pZGVudGlmaWVyIjoiMGYwMmU5YmItZTEwYy00OGEzLTg3NDYtN2ZlZDZjZWU1ZDA3IiwidXNlcm5hbWUiOiJkaXZha2FyLnNAaWFtbmVvLmFpIiwiZW1haWwiOiJkaXZha2FyLnNAaWFtbmVvLmFpIiwiYXV0aGVudGljYXRpb25fdHlwZSI6IjIiLCJzaWQiOiJBMEZBRDI2NEJGRTk2RDM5NDUxQTI4ODYyRUNDMDg1MiIsImp0aSI6IjE2Q0MyMTNCRUQxNTU2OTMwNkQyRDEzQTY0MzgwQTAyIn0.FIfoCb8oYavGQgjzzzbrrJogAQGhOLB5h5undER1-PjWDirRr8HoqKs2eJFYqkeUy95kkB08fNN88cAQ12ukv9LnhEgZlyH-_lRRv5nTr3WNA2VZAUAbjWJelYtwt8nw2s0QLyJhzkW7GK0mQ5Ovjkbhc3HGZNS1pSd81q4_yqrNTUmuEphag62ObhFjzd51ywZRz_5Dw5mRYDvDsL8Kl4dEcKvcqVg2AhRB48N1TV_nEjHWaMzBypXs6YcG9E4ERbXr2boImcOs77EIPy2j_vdvjP8oZeTqnftw0oRwcfLgeHExUdQGM5nUZ8mvkCZJwcx3056Lcl0RB5Zp0ThBjQ'; // Replace with your token
 
 
 // Automate Keka Clock-In
-async function clockInKeka() {
+async function clockInKeka(payload) {
   try {
+    console.log(payload);
+    
     const response = await axios.get(endpoint, {
         headers: {
             'Authorization': `Bearer ${token}`, // Add token as a Bearer token
@@ -108,19 +143,30 @@ async function clockInKeka() {
 cron.schedule('* * * * *', async () => {
   console.log("Checking current location...");
 
-  const currentLocation = await getCurrentLocation();
+  const locationAddress = await getCurrentLocation();
 //   const currentLocation =  getCurrentLocation();
-  console.log("Current Location:", currentLocation);
-  if (currentLocation) {
-    console.log("Latitude:", currentLocation.latitude);
-    console.log("Longitude:", currentLocation.longitude);
-  } else {
-    console.log("Could not retrieve location.");
+  // console.log("Current Location:", currentLocation);
+  // if (currentLocation) {
+  //   console.log("Latitude:", currentLocation.latitude);
+  //   console.log("Longitude:", currentLocation.longitude);
+  // } else {
+  //   console.log("Could not retrieve location.");
+  // }
+  const payload = {
+    // "timestamp": "2024-12-20T16:14:54.232Z",
+    timestamp: new Date().toISOString(),
+    attendanceLogSource: 1,
+    locationAddress,
+    manualClockinType: 1,
+    note: "",
+    originalPunchStatus: 1
   }
+  // console.log(payload);
+  
 
-  if (currentLocation && isLocationMatch(currentLocation, predefinedLocation)) {
+  if (locationAddress && isLocationMatch(locationAddress, predefinedLocation)) {
     console.log("Location matched. Attempting to clock in...");
-    await clockInKeka();
+    await clockInKeka(payload);
     
     //  clockInKeka();
   } else {
